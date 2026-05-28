@@ -14,6 +14,7 @@ creating, listing, opening, renaming, and searching notes.
 - Stable timestamp-based note IDs, independent of titles
 - Recently accessed note list
 - Automatic `updated` timestamp refresh on save
+- Automatic note saving after edits, enabled by default
 - Access tracking when note files are opened directly with `find-file`
 - Optional note search via `consult-ripgrep`
 
@@ -118,6 +119,32 @@ Default:
 
 ```elisp
 ".notes-access.json"
+```
+
+### `notes-auto-save`
+
+Whether note buffers should be saved automatically after edits.
+
+Default:
+
+```elisp
+t
+```
+
+Disable automatic saving:
+
+```elisp
+(setq notes-auto-save nil)
+```
+
+### `notes-auto-save-idle-delay`
+
+Seconds of idle time before an edited note buffer is saved automatically.
+
+Default:
+
+```elisp
+1.0
 ```
 
 ## File Format

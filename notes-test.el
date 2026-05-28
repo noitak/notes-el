@@ -201,6 +201,54 @@
           "\\`[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{2\\}:[0-9]\\{2\\}:[0-9]\\{2\\}[+-][0-9]\\{2\\}:[0-9]\\{2\\}\\'"
           (notes--front-matter-get metadata "updated")))))))
 
+(ert-deftest notes-test-auto-save-is-enabled-by-default ()
+  (should notes-auto-save))
+
+(ert-deftest notes-test-note-mode-enables-auto-save-hook ()
+  (notes-test--with-temp-directory
+    (notes--ensure-directory)
+    (let ((file (notes--note-file "20260521T100000")))
+      (notes--write-new-note
+       file
+       "20260521T100000"
+       "Auto save me"
+       "2026-05-21T10:00:00+09:00")
+      (find-file file)
+      (notes-note-mode 1)
+      (should (memq #'notes--schedule-auto-save after-change-functions)))))
+
+(ert-deftest notes-test-auto-save-can-be-disabled ()
+  (notes-test--with-temp-directory
+    (let ((notes-auto-save nil))
+      (notes--ensure-directory)
+      (let ((file (notes--note-file "20260521T100000")))
+        (notes--write-new-note
+         file
+         "20260521T100000"
+         "Manual save me"
+         "2026-05-21T10:00:00+09:00")
+        (find-file file)
+        (notes-note-mode 1)
+        (should-not (memq #'notes--schedule-auto-save after-change-functions))))))
+
+(ert-deftest notes-test-auto-save-schedules-and-cleans-up-timer ()
+  (notes-test--with-temp-directory
+    (notes--ensure-directory)
+    (let ((file (notes--note-file "20260521T100000")))
+      (notes--write-new-note
+       file
+       "20260521T100000"
+       "Timer save me"
+       "2026-05-21T10:00:00+09:00")
+      (find-file file)
+      (notes-note-mode 1)
+      (goto-char (point-max))
+      (insert "Body\n")
+      (should (timerp notes--auto-save-timer))
+      (notes-note-mode -1)
+      (should-not notes--auto-save-timer)
+      (should-not (memq #'notes--schedule-auto-save after-change-functions)))))
+
 (ert-deftest notes-test-find-file-touches-access ()
   (notes-test--with-temp-directory
     (notes--ensure-directory)

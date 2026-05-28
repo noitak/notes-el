@@ -51,6 +51,19 @@
   :type 'string
   :group 'notes)
 
+(defcustom notes-auto-save t
+  "Non-nil means automatically save note buffers after edits.
+This saves the visited note file itself after Emacs has been idle for
+`notes-auto-save-idle-delay' seconds.  It is separate from Emacs'
+built-in auto-save files."
+  :type 'boolean
+  :group 'notes)
+
+(defcustom notes-auto-save-idle-delay 1.0
+  "Seconds of idle time before automatically saving a note buffer."
+  :type 'number
+  :group 'notes)
+
 (defconst notes--list-buffer-name "*notes*")
 
 (defvar-local notes--note-id nil
@@ -58,6 +71,11 @@
 
 (defvar-local notes--updating-front-matter nil
   "Non-nil while notes.el is updating front matter.")
+
+(defvar-local notes--auto-save-timer nil
+  "Per-buffer timer used for auto-saving note buffers.")
+
+(defvar notes-note-mode)
 
 (defvar notes-list-mode-map
   (let ((map (make-sparse-keymap)))
@@ -295,6 +313,8 @@ CONTENT-START and CONTENT-END bound the content between delimiters."
               (id (notes--front-matter-get metadata "id")))
     (setq notes--note-id id)
     (add-hook 'before-save-hook #'notes--before-save nil t)
+    (when notes-auto-save
+      (add-hook 'after-change-functions #'notes--schedule-auto-save nil t))
     (notes--touch-current-buffer-access)))
 
 (defun notes--replace-front-matter-field (key value)
@@ -353,6 +373,40 @@ FIELDS is an alist of (KEY . VALUE), where VALUE is already formatted for YAML."
              (notes--note-file-p buffer-file-name))
     (let ((notes--updating-front-matter t))
       (notes--replace-front-matter-field "updated" (notes--timestamp)))))
+
+(defun notes--cancel-auto-save ()
+  "Cancel the pending auto-save timer for the current buffer."
+  (when notes--auto-save-timer
+    (cancel-timer notes--auto-save-timer)
+    (setq notes--auto-save-timer nil)))
+
+(defun notes--auto-save-silently ()
+  "Save the current note buffer without echo-area noise."
+  (setq notes--auto-save-timer nil)
+  (when (and notes-auto-save
+             notes-note-mode
+             (buffer-modified-p)
+             buffer-file-name
+             (notes--note-file-p buffer-file-name))
+    (let ((inhibit-message t))
+      (save-buffer))))
+
+(defun notes--schedule-auto-save (&rest _)
+  "Schedule an auto-save for the current note buffer."
+  (when (and notes-auto-save
+             notes-note-mode
+             (not notes--updating-front-matter)
+             buffer-file-name
+             (notes--note-file-p buffer-file-name))
+    (notes--cancel-auto-save)
+    (let ((buffer (current-buffer)))
+      (setq notes--auto-save-timer
+            (run-with-idle-timer
+             notes-auto-save-idle-delay nil
+             (lambda ()
+               (when (buffer-live-p buffer)
+                 (with-current-buffer buffer
+                   (notes--auto-save-silently)))))))))
 
 (defun notes--write-new-note (file id title timestamp)
   "Write a new note FILE with ID, TITLE, and TIMESTAMP."
@@ -466,6 +520,8 @@ FIELDS is an alist of (KEY . VALUE), where VALUE is already formatted for YAML."
   :lighter " notes"
   (if notes-note-mode
       (notes--setup-note-buffer)
+    (notes--cancel-auto-save)
+    (remove-hook 'after-change-functions #'notes--schedule-auto-save t)
     (remove-hook 'before-save-hook #'notes--before-save t)))
 
 ;;;###autoload
