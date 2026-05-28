@@ -10,6 +10,23 @@
 ;; notes.el manages one Markdown file per note.  Each note has YAML front
 ;; matter, while recently accessed order is stored separately in
 ;; `.notes-access.json'.
+;;
+;; Use `notes-new' to create a note, `notes-list' to browse notes ordered by
+;; recent access, and `notes-open' to open a note by completion.  In the notes
+;; list buffer, RET opens the note at point, n creates a note, g refreshes the
+;; list, r renames the note at point, and s searches notes.
+;;
+;; Notes are stored in `notes-directory', which defaults to ~/notes/.  Set it
+;; before loading or using this package to keep notes somewhere else:
+;;
+;;   (setq notes-directory "~/Documents/notes/")
+;;
+;; Each note uses a timestamp-based id as its file name, so changing the title
+;; does not rename the underlying Markdown file.  Opening a note updates access
+;; metadata only; saving a note updates its `updated' front matter field.
+;;
+;; `notes-search' uses `consult-ripgrep' when the optional consult package is
+;; installed.
 
 ;;; Code:
 
