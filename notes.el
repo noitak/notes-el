@@ -66,6 +66,16 @@ built-in auto-save files."
   :type 'number
   :group 'notes)
 
+(defcustom notes-default-type "Note"
+  "Default note type used when creating new notes."
+  :type 'string
+  :group 'notes)
+
+(defcustom notes-type-candidates '("Note" "Reference" "Playbook" "Metric" "Dataset" "Table")
+  "Suggested note types offered by completion."
+  :type '(repeat string)
+  :group 'notes)
+
 (defconst notes--list-buffer-name "*notes*")
 
 (defvar-local notes--note-id nil
@@ -76,6 +86,9 @@ built-in auto-save files."
 
 (defvar-local notes--auto-save-timer nil
   "Per-buffer timer used for auto-saving note buffers.")
+
+(defvar notes-type-history nil
+  "Minibuffer history for note type prompts.")
 
 (defvar notes-note-mode)
 
@@ -172,6 +185,39 @@ built-in auto-save files."
   "Touch access metadata for the current note buffer."
   (when notes--note-id
     (notes--touch-access notes--note-id)))
+
+(defun notes--all-note-types ()
+  "Return a deduplicated list of known note types."
+  (let ((types (delq nil (mapcar (lambda (type)
+                                   (when (stringp type)
+                                     (string-trim type)))
+                                 (append (list notes-default-type)
+                                         notes-type-candidates)))))
+    (when (file-directory-p (notes--directory))
+      (dolist (file (directory-files-recursively (notes--directory) "\\.md\\'"))
+        (when-let* ((metadata (ignore-errors (notes--read-front-matter file)))
+                    (type (notes--front-matter-get metadata "type")))
+          (push (string-trim type) types))))
+    (delete-dups (cl-remove-if (lambda (type)
+                                 (string-empty-p type))
+                               (mapcar (lambda (type)
+                                         (string-trim type))
+                                       types)))))
+
+(defun notes--read-type ()
+  "Read a note type using completion and a default value."
+  (let* ((default (if (and (stringp notes-default-type)
+                           (not (string-empty-p (string-trim notes-default-type))))
+                      (string-trim notes-default-type)
+                    "Note"))
+         (prompt (format "Type (default %s): " default))
+         (value (completing-read prompt
+                                 (notes--all-note-types)
+                                 nil nil default
+                                 'notes-type-history default)))
+    (if (string-empty-p (string-trim value))
+        default
+      value)))
 
 (defun notes--front-matter-bounds ()
   "Return front matter bounds as (START END CONTENT-START CONTENT-END).
@@ -449,7 +495,7 @@ FIELDS is an alist of (KEY . VALUE), where VALUE is already formatted for YAML."
   "Create a new note with TITLE and TYPE from a notes list buffer."
   (interactive
    (list (read-string "Title: ")
-         (read-string "Type: ")))
+         (notes--read-type)))
   (unless (derived-mode-p 'notes-list-mode)
     (user-error "Not in a notes list buffer"))
   (notes-new title type))
@@ -485,7 +531,7 @@ FIELDS is an alist of (KEY . VALUE), where VALUE is already formatted for YAML."
   "Create a new note with TITLE and TYPE."
   (interactive
    (list (read-string "Title: ")
-         (read-string "Type: ")))
+         (notes--read-type)))
   (when (string-empty-p (string-trim title))
     (user-error "Title cannot be empty"))
   (when (string-empty-p (string-trim type))

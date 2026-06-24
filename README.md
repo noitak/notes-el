@@ -63,6 +63,9 @@ Create a note:
 M-x notes-new
 ```
 
+`notes-new` prompts for a title and a type. The type field defaults to
+`Note` and offers completion from common and previously used types.
+
 Open the note list:
 
 ```elisp
@@ -145,6 +148,26 @@ Default:
 
 ```elisp
 1.0
+```
+
+### `notes-default-type`
+
+Default note type offered when creating a new note.
+
+Default:
+
+```elisp
+"Note"
+```
+
+### `notes-type-candidates`
+
+Suggested note types shown by completion when creating a note.
+
+Default:
+
+```elisp
+("Note" "Reference" "Playbook" "Metric" "Dataset" "Table")
 ```
 
 ## File Format

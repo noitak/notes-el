@@ -35,6 +35,43 @@
       (should (string= "[]" (notes--front-matter-get metadata "tags")))
       (should (gethash id access)))))
 
+(ert-deftest notes-test-type-candidates-include-default-and-existing-types ()
+  (notes-test--with-temp-directory
+    (notes--ensure-directory)
+    (let ((notes-default-type "Note")
+          (notes-type-candidates '("Reference" "Metric")))
+      (notes--write-new-note
+       (notes--note-file "20260521T100000")
+       "20260521T100000"
+       "Older"
+       "Playbook"
+       "2026-05-21T10:00:00+09:00")
+      (let ((types (notes--all-note-types)))
+        (should (member "Note" types))
+        (should (member "Reference" types))
+        (should (member "Metric" types))
+        (should (member "Playbook" types))
+        (should (= (length types)
+                   (length (delete-dups (copy-sequence types)))))))))
+
+(ert-deftest notes-test-type-prompt-uses-default-and-completion ()
+  (notes-test--with-temp-directory
+    (let ((notes-default-type "Note")
+          (notes-type-candidates '("Reference"))
+          seen-prompt
+          seen-collection
+          seen-default)
+      (cl-letf (((symbol-function 'completing-read)
+                 (lambda (prompt collection &rest args)
+                   (setq seen-prompt prompt
+                         seen-collection collection
+                         seen-default (nth 4 args))
+                   "")))
+        (should (string= "Note" (notes--read-type)))
+        (should (string-match-p "Type (default Note):" seen-prompt))
+        (should (member "Reference" seen-collection))
+        (should (equal "Note" seen-default))))))
+
 (ert-deftest notes-test-collect-notes-sorts-by-access ()
   (notes-test--with-temp-directory
     (notes--ensure-directory)
