@@ -32,6 +32,8 @@
       (should (string= "Note" (notes--front-matter-get metadata "type")))
       (should (string= "First note: with colon"
                        (notes--front-matter-get metadata "title")))
+      (should (notes--front-matter-get metadata "timestamp"))
+      (should-not (notes--front-matter-get metadata "updated"))
       (should (string= "[]" (notes--front-matter-get metadata "tags")))
       (should (gethash id access)))))
 
@@ -94,6 +96,23 @@
     (let ((notes (notes--collect-notes)))
       (should (string= "Older" (plist-get (car notes) :title)))
       (should (string= "Newer" (plist-get (cadr notes) :title))))))
+
+(ert-deftest notes-test-collect-notes-falls-back-to-updated-timestamp ()
+  (notes-test--with-temp-directory
+    (notes--ensure-directory)
+    (with-temp-file (notes--note-file "20260521T100000")
+      (insert "---\n")
+      (insert "type: Note\n")
+      (insert "id: 20260521T100000\n")
+      (insert "title: \"Legacy\"\n")
+      (insert "updated: 2026-05-21T12:00:00+09:00\n")
+      (insert "tags: []\n")
+      (insert "---\n\n"))
+    (let ((notes (notes--collect-notes)))
+      (should (string= "2026-05-21T12:00:00+09:00"
+                       (plist-get (car notes) :timestamp)))
+      (should (string= "2026-05-21T12:00:00+09:00"
+                       (plist-get (car notes) :accessed))))))
 
 (ert-deftest notes-test-list-displays-access-timestamps ()
   (notes-test--with-temp-directory
@@ -202,13 +221,21 @@
                     #'notes-list-rename))
         (notes--insert-list)
         (notes-list-rename "New title")
-        (should (string= "2026-05-21 10:00:00  New title\n"
-                         (buffer-string))))
+        (let ((line (substring-no-properties (buffer-string))))
+          (should (string-suffix-p "  New title\n" line))
+          (should (= 31 (length line)))
+          (should (= ?- (aref line 4)))
+          (should (= ?- (aref line 7)))
+          (should (= ?  (aref line 10)))
+          (should (= ?: (aref line 13)))
+          (should (= ?: (aref line 16)))))
       (let ((metadata (notes--read-front-matter file)))
         (should (string= "New title"
                          (notes--front-matter-get metadata "title")))
-        (should-not (string= "2026-05-21T10:00:00+09:00"
-                             (notes--front-matter-get metadata "updated")))))))
+        (should-not (notes--front-matter-get metadata "updated"))
+        (should (string-match-p
+                 "\\`[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{2\\}:[0-9]\\{2\\}:[0-9]\\{2\\}[+-][0-9]\\{2\\}:[0-9]\\{2\\}\\'"
+                 (notes--front-matter-get metadata "timestamp")))))))
 
 (ert-deftest notes-test-list-rename-rejects-empty-title ()
   (notes-test--with-temp-directory
@@ -224,7 +251,7 @@
       (notes--insert-list)
       (should-error (notes-list-rename "  ") :type 'user-error))))
 
-(ert-deftest notes-test-before-save-updates-updated-field ()
+(ert-deftest notes-test-before-save-updates-timestamp-field ()
   (notes-test--with-temp-directory
     (notes--ensure-directory)
     (let ((file (notes--note-file "20260521T100000")))
@@ -242,11 +269,11 @@
       (let ((metadata (notes--read-front-matter file)))
         (should-not
          (string= "2026-05-21T10:00:00+09:00"
-                  (notes--front-matter-get metadata "updated")))
+                  (notes--front-matter-get metadata "timestamp")))
         (should
          (string-match-p
           "\\`[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}T[0-9]\\{2\\}:[0-9]\\{2\\}:[0-9]\\{2\\}[+-][0-9]\\{2\\}:[0-9]\\{2\\}\\'"
-          (notes--front-matter-get metadata "updated")))))))
+          (notes--front-matter-get metadata "timestamp")))))))
 
 (ert-deftest notes-test-auto-save-is-enabled-by-default ()
   (should notes-auto-save))

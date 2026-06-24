@@ -13,7 +13,7 @@ creating, listing, opening, renaming, and searching notes.
 - YAML front matter for note metadata
 - Stable timestamp-based note IDs, independent of titles
 - Recently accessed note list
-- Automatic `updated` timestamp refresh on save
+- Automatic `timestamp` refresh on save
 - Automatic note saving after edits, enabled by default
 - Access tracking when note files are opened directly with `find-file`
 - Optional note search via `consult-ripgrep`
@@ -188,8 +188,7 @@ A note looks like this:
 type: Note
 id: 20260521T153012
 title: "Example note"
-created: 2026-05-21T15:30:12+09:00
-updated: 2026-05-21T15:30:12+09:00
+timestamp: 2026-05-21T15:30:12+09:00
 tags: []
 ---
 

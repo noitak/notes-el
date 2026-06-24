@@ -24,7 +24,7 @@
 ;; Each note uses a timestamp-based id as its file name, so changing the title
 ;; does not rename the underlying Markdown file.  New notes require a `type'
 ;; front matter field so the file format stays closer to OKF. Opening a note
-;; updates access metadata only; saving a note updates its `updated' front
+;; updates access metadata only; saving a note updates its `timestamp' front
 ;; matter field.
 ;;
 ;; `notes-search' uses `consult-ripgrep' when the optional consult package is
@@ -308,12 +308,14 @@ CONTENT-START and CONTENT-END bound the content between delimiters."
                      (file-name-base file)))
              (title (or (notes--front-matter-get metadata "title")
                         (file-name-base file)))
-             (created (notes--front-matter-get metadata "created"))
-             (accessed (or (gethash id access) created "")))
+             (timestamp (or (notes--front-matter-get metadata "timestamp")
+                            (notes--front-matter-get metadata "updated")
+                            ""))
+             (accessed (or (gethash id access) timestamp)))
         (push (list :id id
                     :title title
                     :file file
-                    :created created
+                    :timestamp timestamp
                     :accessed accessed)
               notes)))
     (sort notes
@@ -395,13 +397,13 @@ FIELDS is an alist of (KEY . VALUE), where VALUE is already formatted for YAML."
         (write-region (point-min) (point-max) file nil 'silent)))))
 
 (defun notes--rename-note-title (file title)
-  "Rename note FILE to TITLE and update its `updated' timestamp."
+  "Rename note FILE to TITLE and update its `timestamp' field."
   (when (string-empty-p (string-trim title))
     (user-error "Title cannot be empty"))
   (notes--update-note-file-front-matter
    file
    `(("title" . ,(notes--quote-yaml-string title))
-     ("updated" . ,(notes--timestamp)))))
+     ("timestamp" . ,(notes--timestamp)))))
 
 (defun notes--list-note-at-point ()
   "Return note properties at point in a notes list buffer."
@@ -415,12 +417,12 @@ FIELDS is an alist of (KEY . VALUE), where VALUE is already formatted for YAML."
     (list :file file :id id :title title)))
 
 (defun notes--before-save ()
-  "Update the current note's `updated' field before saving."
+  "Update the current note's `timestamp' field before saving."
   (when (and (not notes--updating-front-matter)
              buffer-file-name
              (notes--note-file-p buffer-file-name))
     (let ((notes--updating-front-matter t))
-      (notes--replace-front-matter-field "updated" (notes--timestamp)))))
+      (notes--replace-front-matter-field "timestamp" (notes--timestamp)))))
 
 (defun notes--cancel-auto-save ()
   "Cancel the pending auto-save timer for the current buffer."
@@ -465,8 +467,7 @@ FIELDS is an alist of (KEY . VALUE), where VALUE is already formatted for YAML."
     (insert "type: " (notes--quote-yaml-string type) "\n")
     (insert "id: " id "\n")
     (insert "title: " (notes--quote-yaml-string title) "\n")
-    (insert "created: " timestamp "\n")
-    (insert "updated: " timestamp "\n")
+    (insert "timestamp: " timestamp "\n")
     (insert "tags: []\n")
     (insert "---\n\n")))
 
