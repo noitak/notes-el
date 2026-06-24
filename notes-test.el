@@ -23,12 +23,13 @@
 
 (ert-deftest notes-test-new-note-writes-front-matter-and-access ()
   (notes-test--with-temp-directory
-    (notes-new "First note: with colon")
+    (notes-new "First note: with colon" "Note")
     (let* ((file buffer-file-name)
            (metadata (notes--read-front-matter file))
            (id (notes--front-matter-get metadata "id"))
            (access (notes--read-access)))
       (should (string-suffix-p ".md" file))
+      (should (string= "Note" (notes--front-matter-get metadata "type")))
       (should (string= "First note: with colon"
                        (notes--front-matter-get metadata "title")))
       (should (string= "[]" (notes--front-matter-get metadata "tags")))
@@ -41,11 +42,13 @@
      (notes--note-file "20260521T100000")
      "20260521T100000"
      "Older"
+     "Note"
      "2026-05-21T10:00:00+09:00")
     (notes--write-new-note
      (notes--note-file "20260521T110000")
      "20260521T110000"
      "Newer"
+     "Note"
      "2026-05-21T11:00:00+09:00")
     (let ((access (make-hash-table :test 'equal)))
       (puthash "20260521T100000" "2026-05-21T12:00:00+09:00" access)
@@ -62,11 +65,13 @@
      (notes--note-file "20260521T100000")
      "20260521T100000"
      "Older"
+     "Note"
      "2026-05-21T10:00:00+09:00")
     (notes--write-new-note
      (notes--note-file "20260521T110000")
      "20260521T110000"
      "Newer"
+     "Note"
      "2026-05-21T11:00:00+09:00")
     (let ((access (make-hash-table :test 'equal)))
       (puthash "20260521T100000" "2026-05-21T12:00:00+09:00" access)
@@ -110,9 +115,10 @@
         (notes-list-mode)
         (should (eq (lookup-key notes-list-mode-map (kbd "n"))
                     #'notes-list-new))
-        (notes-list-new "From list")
+        (notes-list-new "From list" "Note")
         (setq file buffer-file-name))
       (let* ((metadata (notes--read-front-matter file)))
+        (should (string= "Note" (notes--front-matter-get metadata "type")))
         (should (string= "From list"
                          (notes--front-matter-get metadata "title")))))))
 
@@ -130,6 +136,7 @@
        (notes--note-file "20260521T100000")
        "20260521T100000"
        "Refresh me"
+       "Note"
        "2026-05-21T10:00:00+09:00")
       (notes-list-refresh)
       (should (string= "2026-05-21 10:00:00  Refresh me\n"
@@ -150,6 +157,7 @@
        file
        "20260521T100000"
        "Old title"
+       "Note"
        "2026-05-21T10:00:00+09:00")
       (with-temp-buffer
         (notes-list-mode)
@@ -172,6 +180,7 @@
      (notes--note-file "20260521T100000")
      "20260521T100000"
      "Old title"
+     "Note"
      "2026-05-21T10:00:00+09:00")
     (with-temp-buffer
       (notes-list-mode)
@@ -186,6 +195,7 @@
        file
        "20260521T100000"
        "Save me"
+       "Note"
        "2026-05-21T10:00:00+09:00")
       (find-file file)
       (notes-note-mode 1)
@@ -212,6 +222,7 @@
        file
        "20260521T100000"
        "Auto save me"
+       "Note"
        "2026-05-21T10:00:00+09:00")
       (find-file file)
       (notes-note-mode 1)
@@ -226,6 +237,7 @@
          file
          "20260521T100000"
          "Manual save me"
+         "Note"
          "2026-05-21T10:00:00+09:00")
         (find-file file)
         (notes-note-mode 1)
@@ -239,6 +251,7 @@
        file
        "20260521T100000"
        "Timer save me"
+       "Note"
        "2026-05-21T10:00:00+09:00")
       (find-file file)
       (notes-note-mode 1)
@@ -257,6 +270,7 @@
        file
        "20260521T120000"
        "Find me"
+       "Note"
        "2026-05-21T12:00:00+09:00")
       (should-not (gethash "20260521T120000" (notes--read-access)))
       (find-file file)

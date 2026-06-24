@@ -162,6 +162,7 @@ A note looks like this:
 
 ```markdown
 ---
+type: Note
 id: 20260521T153012
 title: "Example note"
 created: 2026-05-21T15:30:12+09:00

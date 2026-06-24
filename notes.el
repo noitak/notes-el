@@ -22,8 +22,10 @@
 ;;   (setq notes-directory "~/Documents/notes/")
 ;;
 ;; Each note uses a timestamp-based id as its file name, so changing the title
-;; does not rename the underlying Markdown file.  Opening a note updates access
-;; metadata only; saving a note updates its `updated' front matter field.
+;; does not rename the underlying Markdown file.  New notes require a `type'
+;; front matter field so the file format stays closer to OKF. Opening a note
+;; updates access metadata only; saving a note updates its `updated' front
+;; matter field.
 ;;
 ;; `notes-search' uses `consult-ripgrep' when the optional consult package is
 ;; installed.
@@ -237,7 +239,7 @@ CONTENT-START and CONTENT-END bound the content between delimiters."
   "Return KEY from METADATA."
   (when metadata
     (let ((value (gethash key metadata)))
-      (if (and (stringp value) (member key '("title")))
+      (if (and (stringp value) (member key '("title" "type")))
           (notes--unquote-yaml-string value)
         value))))
 
@@ -408,10 +410,13 @@ FIELDS is an alist of (KEY . VALUE), where VALUE is already formatted for YAML."
                  (with-current-buffer buffer
                    (notes--auto-save-silently)))))))))
 
-(defun notes--write-new-note (file id title timestamp)
-  "Write a new note FILE with ID, TITLE, and TIMESTAMP."
+(defun notes--write-new-note (file id title type timestamp)
+  "Write a new note FILE with ID, TITLE, TYPE, and TIMESTAMP."
+  (when (string-empty-p (string-trim type))
+    (user-error "Type cannot be empty"))
   (with-temp-file file
     (insert "---\n")
+    (insert "type: " (notes--quote-yaml-string type) "\n")
     (insert "id: " id "\n")
     (insert "title: " (notes--quote-yaml-string title) "\n")
     (insert "created: " timestamp "\n")
@@ -440,12 +445,14 @@ FIELDS is an alist of (KEY . VALUE), where VALUE is already formatted for YAML."
   (notes--insert-list))
 
 ;;;###autoload
-(defun notes-list-new (title)
-  "Create a new note with TITLE from a notes list buffer."
-  (interactive "sTitle: ")
+(defun notes-list-new (title type)
+  "Create a new note with TITLE and TYPE from a notes list buffer."
+  (interactive
+   (list (read-string "Title: ")
+         (read-string "Type: ")))
   (unless (derived-mode-p 'notes-list-mode)
     (user-error "Not in a notes list buffer"))
-  (notes-new title))
+  (notes-new title type))
 
 ;;;###autoload
 (defun notes-list-rename (title)
@@ -474,16 +481,20 @@ FIELDS is an alist of (KEY . VALUE), where VALUE is already formatted for YAML."
     (notes--setup-note-buffer)))
 
 ;;;###autoload
-(defun notes-new (title)
-  "Create a new note with TITLE."
-  (interactive "sTitle: ")
+(defun notes-new (title type)
+  "Create a new note with TITLE and TYPE."
+  (interactive
+   (list (read-string "Title: ")
+         (read-string "Type: ")))
   (when (string-empty-p (string-trim title))
     (user-error "Title cannot be empty"))
+  (when (string-empty-p (string-trim type))
+    (user-error "Type cannot be empty"))
   (notes--ensure-directory)
   (let* ((id (notes--generate-id))
          (file (notes--note-file id))
          (timestamp (notes--timestamp)))
-    (notes--write-new-note file id title timestamp)
+    (notes--write-new-note file id title type timestamp)
     (notes--touch-access id)
     (find-file file)
     (notes--setup-note-buffer)))
