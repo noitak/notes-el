@@ -81,6 +81,7 @@ Inside the note list:
 | `g` | Refresh the list |
 | `r` | Rename the note at point |
 | `s` | Search notes with `consult-ripgrep` |
+| `t` | Show the tag list |
 | `q` | Quit the list window |
 
 ## Commands
@@ -91,6 +92,7 @@ Inside the note list:
 | `notes-new` | Create a new note |
 | `notes-open` | Open a note by title completion |
 | `notes-search` | Search notes with `consult-ripgrep` |
+| `notes-tag-list` | List unique tags; `RET` shows notes with the tag, `g` refreshes |
 | `notes-list-refresh` | Refresh the note list buffer |
 | `notes-list-new` | Create a note from the note list |
 | `notes-list-rename` | Rename the note at point in the note list |
@@ -212,6 +214,20 @@ Access time is updated when:
 - A note file in `notes-directory` is opened directly with `find-file`
 
 ## Searching
+
+Set tags in each note's front matter using an inline YAML list:
+
+```yaml
+tags: [emacs, work, "tag with spaces"]
+```
+
+`M-x notes-tag-list` displays tags from saved notes in alphabetical order,
+merging tags that differ only in case and displaying them in lowercase.
+Press `RET` on a tag to
+display notes with that tag, ignoring case, in recent access order. In the results,
+`RET` opens a note and `g` refreshes while keeping the tag filter.
+Tag commands do not require `consult`. Plain,
+single-quoted, and double-quoted strings in inline lists are supported.
 
 `notes-search` uses `consult-ripgrep` to search inside `notes-directory`.
 

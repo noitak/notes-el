@@ -14,7 +14,7 @@
 ;; Use `notes-new' to create a note, `notes-list' to browse notes ordered by
 ;; recent access, and `notes-open' to open a note by completion.  In the notes
 ;; list buffer, RET opens the note at point, n creates a note, g refreshes the
-;; list, r renames the note at point, and s searches notes.
+;; list, r renames the note at point, s searches notes, and t lists tags.
 ;;
 ;; Notes are stored in `notes-directory', which defaults to ~/notes/.  Set it
 ;; before loading or using this package to keep notes somewhere else:
@@ -78,6 +78,19 @@ built-in auto-save files."
 
 (defconst notes--list-buffer-name "*notes*")
 
+(defvar-local notes--tag-filter nil
+  "Tag used to filter the current notes list, or nil for all notes.")
+
+(defvar notes-tag-list-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "RET") #'notes-tag-list-open)
+    (define-key map (kbd "g") #'notes-tag-list-refresh)
+    map)
+  "Keymap for `notes-tag-list-mode'.")
+
+(define-derived-mode notes-tag-list-mode special-mode "notes-tags"
+  "Major mode for browsing note tags.")
+
 (defvar-local notes--note-id nil
   "Note id associated with the current note buffer.")
 
@@ -99,12 +112,18 @@ built-in auto-save files."
     (define-key map (kbd "n") #'notes-list-new)
     (define-key map (kbd "r") #'notes-list-rename)
     (define-key map (kbd "s") #'notes-search)
+    (define-key map (kbd "t") #'notes-tag-list)
     (define-key map (kbd "q") #'quit-window)
     map)
   "Keymap for `notes-list-mode'.")
 
 (define-derived-mode notes-list-mode special-mode "notes-list"
-  "Major mode for listing notes."
+  "Major mode for listing notes.
+\\<notes-list-mode-map>
+\\[notes-list-open] opens the note at point; \\[notes-list-new] creates a note.
+\\[notes-list-refresh] refreshes the list; \\[notes-list-rename] renames a note.
+\\[notes-search] searches notes; \\[notes-tag-list] lists tags.
+\\[quit-window] quits the window."
   (setq truncate-lines t))
 
 (defun notes--directory ()
@@ -314,6 +333,8 @@ CONTENT-START and CONTENT-END bound the content between delimiters."
              (accessed (or (gethash id access) timestamp)))
         (push (list :id id
                     :title title
+                    :tags (notes--parse-tags
+                           (notes--front-matter-get metadata "tags"))
                     :file file
                     :timestamp timestamp
                     :accessed accessed)
@@ -333,11 +354,45 @@ CONTENT-START and CONTENT-END bound the content between delimiters."
     ""
     (or timestamp ""))))
 
+(defun notes--parse-tags (value)
+  "Return tags from inline YAML list VALUE.
+Support plain, double-quoted, and single-quoted strings."
+  (when (and value (string-prefix-p "[" value)
+             (string-suffix-p "]" value))
+    (let ((text (substring value 1 -1))
+          (start 0)
+          tags)
+      (while (string-match
+              "[ \t]*\\(\"\\(?:\\\\.\\|[^\"\\\\]\\)*\"\\|'\\(?:''\\|[^']\\)*'\\|[^,]+\\)[ \t]*\\(?:,\\|\\'\\)"
+              text start)
+        (let ((tag (string-trim (match-string 1 text))))
+          (setq start (match-end 0))
+          (setq tag (if (and (string-prefix-p "'" tag)
+                             (string-suffix-p "'" tag))
+                        (replace-regexp-in-string "''" "'" (substring tag 1 -1) t t)
+                      (notes--unquote-yaml-string tag)))
+          (unless (string-empty-p tag)
+            (push tag tags))))
+      (delete-dups (nreverse tags)))))
+
+(defun notes--all-tags ()
+  "Return sorted unique lowercase tags from saved notes."
+  (sort (delete-dups
+         (apply #'append (mapcar (lambda (note)
+                                  (mapcar #'downcase (plist-get note :tags)))
+                                (notes--collect-notes))))
+        #'string<))
+
 (defun notes--insert-list ()
   "Insert note list into the current buffer."
   (let ((inhibit-read-only t))
     (erase-buffer)
-    (if-let* ((notes (notes--collect-notes)))
+    (if-let* ((notes (cl-remove-if-not
+                     (lambda (note)
+                       (or (null notes--tag-filter)
+                           (member (downcase notes--tag-filter)
+                                   (mapcar #'downcase (plist-get note :tags)))))
+                     (notes--collect-notes))))
         (dolist (note notes)
           (let ((start (point))
                 (title (plist-get note :title))
@@ -352,7 +407,9 @@ CONTENT-START and CONTENT-END bound the content between delimiters."
                         notes-title ,title
                         mouse-face highlight
                         help-echo "RET: open note"))))
-      (insert "No notes yet. Press n to create one.\n"))
+      (insert (if notes--tag-filter
+                  (format "No notes with tag: %s\n" notes--tag-filter)
+                "No notes yet. Press n to create one.\n")))
     (goto-char (point-min))))
 
 (defun notes--setup-note-buffer ()
@@ -470,6 +527,45 @@ FIELDS is an alist of (KEY . VALUE), where VALUE is already formatted for YAML."
     (insert "timestamp: " timestamp "\n")
     (insert "tags: []\n")
     (insert "---\n\n")))
+
+;;;###autoload
+(defun notes-tag-list ()
+  "Display unique lowercase tags from saved notes.
+RET shows notes with a tag, ignoring case."
+  (interactive)
+  (let ((buffer (get-buffer-create "*notes-tags*")))
+    (with-current-buffer buffer
+      (notes-tag-list-mode)
+      (notes-tag-list-refresh))
+    (pop-to-buffer buffer)))
+
+(defun notes-tag-list-refresh ()
+  "Refresh the tag list."
+  (interactive)
+  (unless (derived-mode-p 'notes-tag-list-mode)
+    (user-error "Not in a tags list buffer"))
+  (let ((inhibit-read-only t)
+        (tags (notes--all-tags)))
+    (erase-buffer)
+    (if tags
+        (dolist (tag tags)
+          (insert (propertize (concat tag "\n") 'notes-tag tag
+                              'mouse-face 'highlight)))
+      (insert "No tags yet.\n"))
+    (goto-char (point-min))))
+
+(defun notes-tag-list-open ()
+  "Show notes with the tag at point."
+  (interactive)
+  (let ((tag (get-text-property (point) 'notes-tag)))
+    (unless tag (user-error "No tag at point"))
+    (let ((buffer (get-buffer-create "*notes-tag-notes*")))
+      (with-current-buffer buffer
+        (notes-list-mode)
+        (setq notes--tag-filter tag)
+        (setq header-line-format (concat "Tag: " tag))
+        (notes--insert-list))
+      (pop-to-buffer buffer))))
 
 ;;;###autoload
 (defun notes-list ()

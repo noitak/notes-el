@@ -340,6 +340,48 @@
       (find-file file)
       (should (gethash "20260521T120000" (notes--read-access))))))
 
+(ert-deftest notes-test-parse-tags ()
+  (should-not (notes--parse-tags nil))
+  (should-not (notes--parse-tags "[]"))
+  (should (equal (notes--parse-tags
+                  "[emacs, work, emacs, \"a,b\", 'it''s', \"日本語\"]")
+                 '("emacs" "work" "a,b" "it's" "日本語"))))
+
+(ert-deftest notes-test-tag-browsing-and-filter-refresh ()
+  (notes-test--with-temp-directory
+    (dolist (entry '(("a" "[Emacs, Work, emacs]")
+                     ("b" "[EMACS-LISP]")
+                     ("c" "[EMACS]")))
+      (with-temp-file (notes--note-file (car entry))
+        (insert (format "---\nid: %s\ntitle: %s\ntimestamp: %s\ntags: %s\n---\n"
+                        (car entry) (car entry) (car entry) (cadr entry)))))
+    (should (equal (notes--all-tags) '("emacs" "emacs-lisp" "work")))
+    (save-window-excursion
+      (notes-tag-list)
+      (should (equal (buffer-string) "emacs\nemacs-lisp\nwork\n"))
+      (notes-tag-list-open)
+      (should (equal notes--tag-filter "emacs"))
+      (should (equal (buffer-string) "c  c\na  a\n"))
+      (should (equal (get-text-property (point) 'notes-id) "c"))
+      (with-temp-file (notes--note-file "c")
+        (insert "---\nid: c\ntags: []\n---\n"))
+      (notes-list-refresh)
+      (should (equal (buffer-string) "a  a\n"))
+      (with-temp-file (notes--note-file "a")
+        (insert "---\nid: a\ntags: []\n---\n"))
+      (notes-list-refresh)
+      (should (equal (buffer-string) "No notes with tag: emacs\n"))
+      (notes-list)
+      (should-not notes--tag-filter))))
+
+(ert-deftest notes-test-empty-tag-list ()
+  (notes-test--with-temp-directory
+    (with-temp-buffer
+      (notes-tag-list-mode)
+      (notes-tag-list-refresh)
+      (should (equal (buffer-string) "No tags yet.\n"))
+      (should-error (notes-tag-list-open) :type 'user-error))))
+
 (provide 'notes-test)
 
 ;;; notes-test.el ends here
